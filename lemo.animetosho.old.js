@@ -1,6 +1,37 @@
 const QUALITIES = ["1080", "720", "540", "480"];
 const AUDIO_RE = /\b(dubbed|dual[-\s._]?audio|dual|english[-\s._]?(?:dub|audio)|eng[-\s._]?(?:dub|audio)|multi[-\s._]?audio)\b/i;
 const MAX_SAFE_BATCH_EPISODES = 36;
+const REQUEST_TIMEOUT_MS = 6000;
+
+async function fetchJson(request, url) {
+  const controller = new AbortController();
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error("AnimeTosho did not respond within 6 seconds. Try again later."));
+      controller.abort();
+    }, REQUEST_TIMEOUT_MS);
+  });
+  const response = (async () => {
+    const res = await request(url, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" }
+    });
+    if (!res.ok) throw new Error("AnimeTosho returned HTTP " + res.status + ".");
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error("AnimeTosho returned an invalid response instead of JSON.");
+    }
+  })();
+
+  try {
+    return await Promise.race([response, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function episodeMatches(title, episode) {
   const target = Number.parseInt(episode, 10);
@@ -103,9 +134,8 @@ export default new class Tosho {
     if (!anidbEid) return [];
 
     const query = this._buildQuery({ resolution, exclusions });
-    const res = await request(this.url + "?eid=" + anidbEid + query);
-    const data = await res.json();
-    return data.length ? this.map(data, false, options?.useTorrent) : [];
+    const data = await fetchJson(request, this.url + "?eid=" + anidbEid + query);
+    return Array.isArray(data) ? this.map(data, false, options?.useTorrent) : [];
   }
 
   async batch({ anidbAid, resolution, exclusions = [], episode, fetch: request = fetch }, options) {
@@ -113,12 +143,12 @@ export default new class Tosho {
     if (!anidbAid) return [];
 
     const query = this._buildQuery({ resolution, exclusions });
-    const res = await request(this.url + "?order=size-d&aid=" + anidbAid + query);
-    const data = (await res.json()).filter(entry => (
+    const data = await fetchJson(request, this.url + "?order=size-d&aid=" + anidbAid + query);
+    const entries = (Array.isArray(data) ? data : []).filter(entry => (
       entry.num_files >= Math.min(24, Math.max(2, episode ?? 1)) &&
       acceptableEpisodeResult(entry.title || entry.torrent_name || "", episode)
     ));
-    return data.length ? this.map(data, true, options?.useTorrent) : [];
+    return this.map(entries, true, options?.useTorrent);
   }
 
   async movie({ anidbAid, resolution, exclusions = [], fetch: request = fetch }, options) {
@@ -126,17 +156,14 @@ export default new class Tosho {
     if (!anidbAid) return [];
 
     const query = this._buildQuery({ resolution, exclusions });
-    const res = await request(this.url + "?aid=" + anidbAid + query);
-    const data = await res.json();
-    return data.length ? this.map(data, false, options?.useTorrent) : [];
+    const data = await fetchJson(request, this.url + "?aid=" + anidbAid + query);
+    return Array.isArray(data) ? this.map(data, false, options?.useTorrent) : [];
   }
 
-  async test() {
-    try {
-      if (!(await fetch(this.url)).ok) throw new Error(`Failed to load data from ${this.url}! Is the site down?`);
-      return true;
-    } catch {
-      throw new Error(`Could not reach ${this.url}! Does the site work in your region?`);
-    }
+  async test({ fetch: request = fetch } = {}) {
+    // The archive disabled unfiltered feeds; filtered historical searches still work.
+    const data = await fetchJson(request, this.url + "?aid=1");
+    if (!Array.isArray(data)) throw new Error("AnimeTosho archive returned an invalid feed.");
+    return true;
   }
 }();

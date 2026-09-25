@@ -2,7 +2,8 @@ const DOMAIN = "https://nyaa.si";
 const CATEGORY = "1_2";
 const FILTER = "0";
 const TIMEOUT_MS = 6000;
-const MAX_SEARCHES = 8;
+const MAX_SEARCH_TITLES = 3;
+const feedRequests = new WeakMap();
 const MAX_SAFE_BATCH_EPISODES = 36;
 const TITLE_STOP_WORDS = new Set(["a", "an", "and", "cour", "of", "part", "season", "the", "to"]);
 
@@ -73,7 +74,19 @@ function buildUrl(query) {
   return `${DOMAIN}/?${params.toString()}`;
 }
 
-async function fetchText(request, url) {
+function fetchText(request, url) {
+  let pending = feedRequests.get(request);
+  if (!pending) {
+    pending = new Map();
+    feedRequests.set(request, pending);
+  }
+  if (pending.has(url)) return pending.get(url);
+  const task = requestText(request, url).finally(() => pending.delete(url));
+  pending.set(url, task);
+  return task;
+}
+
+async function requestText(request, url) {
   const controller = new AbortController();
   let timer;
 
@@ -91,7 +104,9 @@ async function fetchText(request, url) {
     });
 
     if (!res.ok) throw new Error(`Nyaa returned HTTP ${res.status}.`);
-    return res.text();
+    const xml = await res.text();
+    if (!/<rss\b/i.test(xml)) throw new Error("Nyaa returned a page instead of an RSS feed.");
+    return xml;
   })();
 
   response.catch(() => {});
@@ -331,41 +346,22 @@ function dedupe(results) {
     .sort((a, b) => b.seeders - a.seeders);
 }
 
-async function search(query, suffixes, isBatch = false) {
+async function search(query, isBatch = false) {
   const availableTitles = queryTitles(query);
   if (!availableTitles.length) return [];
 
   const request = query.fetch ?? fetch;
-  const titles = titleVariants(availableTitles.slice(0, 3));
+  // Give each canonical language a query before trying another spelling.
+  const titles = [...new Set(availableTitles.map(title => normalizeTitle(titleVariants([title])[0])).filter(Boolean))]
+    .slice(0, MAX_SEARCH_TITLES);
+  if (!titles.length) return [];
   const numbering = releaseNumbering(availableTitles, query.episode, query.anilistId);
   const episode = numbering.episode == null ? null : String(numbering.episode).padStart(2, "0");
   const season = numbering.season;
   const normalizedQuery = { ...query, titles: availableTitles, episode: numbering.episode, expectedSeason: season };
-  const absoluteSeason = season ?? 1;
-  const absolute = episode ? `S${String(absoluteSeason).padStart(2, "0")}E${episode}` : null;
-  const searches = [];
-
-  for (const title of titles) {
-    for (const suffix of suffixes) {
-      if (episode && !isBatch) {
-        if (absolute) searches.push(`${title} ${absolute} ${suffix}`);
-        searches.push(`${title} - ${episode} ${suffix}`);
-        searches.push(`${title} ${episode} ${suffix}`);
-      }
-
-      if (isBatch) {
-        searches.push(`${title} batch ${suffix}`);
-        searches.push(`${title} complete ${suffix}`);
-        searches.push(`${title} season ${suffix}`);
-      }
-
-      if (!episode || isBatch) searches.push(`${title} ${suffix}`);
-    }
-
-    if (episode && !isBatch) searches.push(title);
-  }
-
-  const attempts = [...new Set(searches)].slice(0, MAX_SEARCHES);
+  const searches = episode && !isBatch ? titles.map(title => `${title} ${episode}`) : [];
+  // Broad queries also find episode ranges; audio and episode checks stay local.
+  const attempts = [...new Set([...searches, ...titles])];
   const settled = await Promise.allSettled(attempts.map(async item => {
     const xml = await fetchText(request, buildUrl(item));
     return parseRss(xml, normalizedQuery);
@@ -374,6 +370,8 @@ async function search(query, suffixes, isBatch = false) {
   const results = settled
     .filter(item => item.status === "fulfilled")
     .flatMap(item => item.value);
+
+  if (settled.every(item => item.status === "rejected")) throw settled[0].reason;
 
   return applyExclusions(dedupe(results), normalizedQuery.exclusions);
 }
@@ -386,14 +384,14 @@ export default {
   },
 
   async single(query) {
-    return search(query, ["English Dub", "Dubbed", "Dual Audio"]);
+    return search(query);
   },
 
   async batch(query) {
-    return search(query, ["English Dub", "Dubbed", "Dual Audio"], true);
+    return search(query, true);
   },
 
   async movie(query) {
-    return search(query, ["English Dub", "Dubbed", "Dual Audio"]);
+    return search(query);
   }
 };

@@ -1,21 +1,35 @@
 const QUALITIES = ["1080", "720", "540", "480"];
 const MAX_SAFE_BATCH_EPISODES = 36;
 
+const REQUEST_TIMEOUT_MS = 6000;
+
 async function fetchJson(request, url) {
-  const res = await request(url, {
-    headers: { Accept: "application/json" }
+  const controller = new AbortController();
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error("NekoBT did not respond within 6 seconds. Try again later."));
+      controller.abort();
+    }, REQUEST_TIMEOUT_MS);
   });
-
-  if (!res.ok) return null;
-
-  const text = await res.text();
-  const trimmed = text.trim();
-  if (!trimmed || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) return null;
+  const response = (async () => {
+    const res = await request(url, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" }
+    });
+    if (!res.ok) throw new Error("NekoBT returned HTTP " + res.status + ".");
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error("NekoBT returned an invalid response instead of JSON.");
+    }
+  })();
 
   try {
-    return JSON.parse(trimmed);
-  } catch {
-    return null;
+    return await Promise.race([response, timeout]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -105,6 +119,7 @@ export default new class NekoBT {
     exclusions = []
   }) {
     if (typeof navigator !== "undefined" && navigator.onLine === false) return [];
+    if (!tvdbId && !tmdbId) return [];
 
     const mediaParams = new URLSearchParams({ limit: "1" });
     if (tvdbId) mediaParams.append("tvdbid", tvdbId.toString());
@@ -113,7 +128,7 @@ export default new class NekoBT {
     const mappings = await this._fetch(request, mediaParams);
     if (!mappings?.media) return [];
 
-    const ep = mappings.media.episodes?.find(item => item.tvdbId === tvdbEId)
+    const ep = (tvdbEId ? mappings.media.episodes?.find(item => item.tvdbId === tvdbEId) : undefined)
       ?? mappings.media.episodes?.find(item => item.episode === episode);
     const searchParams = new URLSearchParams({
       media_id: mappings.media.id,
@@ -122,7 +137,7 @@ export default new class NekoBT {
 
     if (ep?.id) searchParams.append("episode_ids", ep.id.toString());
 
-    const high = ep?.tvdbId === tvdbEId;
+    const high = Boolean(tvdbEId && ep?.tvdbId === tvdbEId);
     const lowerExclusions = exclusions.map(item => item.toLowerCase());
     const effectiveExclusions = resolution
       ? lowerExclusions.concat(...QUALITIES.filter(item => item !== resolution).map(item => `${item}p`))
@@ -159,13 +174,9 @@ export default new class NekoBT {
     return [];
   }
 
-  async test() {
-    try {
-      const { ok } = await fetch(this.url + "announcements");
-      if (!ok) throw new Error(`Failed to load data from ${this.url}! Is the site down?`);
-      return true;
-    } catch {
-      throw new Error(`Could not reach ${this.url}! Does the site work in your region?`);
-    }
+  async test({ fetch: request = fetch } = {}) {
+    const data = await fetchJson(request, this.url + "announcements");
+    if (!data || data.error || !data.data) throw new Error("NekoBT returned an invalid response.");
+    return true;
   }
 }();

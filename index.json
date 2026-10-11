@@ -70,5 +70,20 @@
         "default": false
       }
     }
+  },
+  {
+    "manifestVersion": 2,
+    "id": "hayase.extension.lemosine.knaben.english-dubs",
+    "name": "Lemo Dub Knaben",
+    "version": "0.1.0",
+    "description": "Anime torrent backup from Knaben. Requires an explicit English dub/audio title label.",
+    "type": "torrent",
+    "accuracy": "low",
+    "ratio": 0,
+    "media": "dub",
+    "languages": ["US"],
+    "icon": "https://webtorrent.io/img/webtorrent-small.png",
+    "update": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/index.json",
+    "code": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/lemo.knaben.dubs.js?v=0.1.0"
   }
 ]

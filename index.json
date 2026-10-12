@@ -51,32 +51,25 @@
   {
     "manifestVersion": 2,
     "id": "hayase.extension.lemosine.animetosho.old",
-    "name": "Lemo Dub AnimeTosho (Archive)",
-    "version": "0.1.12",
-    "description": "English-audio archive. AnimeTosho stopped updates in May 2026; its feed is scheduled to close in October 2026.",
+    "name": "Lemo Dub AnimeTosho (Retired)",
+    "version": "0.1.13",
+    "description": "Retired: AnimeTosho shut down its feed/API in October 2026. Disable this entry; it no longer searches.",
     "type": "torrent",
     "accuracy": "high",
     "ratio": 0,
     "media": "dub",
     "languages": ["US"],
-    "url": "aHR0cHM6Ly9mZWVkLmFuaW1ldG9zaG8ub3JnL2pzb24=",
-    "icon": "https://animetosho.org/inc/favicon.ico",
+    "icon": "https://webtorrent.io/img/webtorrent-small.png",
     "update": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/index.json",
-    "code": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/lemo.animetosho.old.js?v=0.1.12",
-    "options": {
-      "useTorrent": {
-        "type": "boolean",
-        "description": "Use .torrent files instead of magnet links.",
-        "default": false
-      }
-    }
+    "code": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/lemo.animetosho.old.js?v=0.1.13"
   },
   {
     "manifestVersion": 2,
     "id": "hayase.extension.lemosine.knaben.english-dubs",
     "name": "Lemo Dub Knaben",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Anime torrent backup from Knaben. Requires an explicit English dub/audio title label.",
+    "url": "aHR0cHM6Ly9hcGkua25hYmVuLm9yZy92Mi8=",
     "type": "torrent",
     "accuracy": "low",
     "ratio": 0,
@@ -84,6 +77,6 @@
     "languages": ["US"],
     "icon": "https://webtorrent.io/img/webtorrent-small.png",
     "update": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/index.json",
-    "code": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/lemo.knaben.dubs.js?v=0.1.0"
+    "code": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/lemo.knaben.dubs.js?v=0.1.1"
   }
 ]

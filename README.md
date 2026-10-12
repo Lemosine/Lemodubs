@@ -8,12 +8,15 @@ Import URL:
 https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/index.json
 ```
 
-Sources: SeaDex/Releases.moe, Nyaa.si, NekoBT, the AnimeTosho archive, and Knaben.
+Sources: SeaDex/Releases.moe, Nyaa.si, NekoBT, and Knaben.
 
-AnimeTosho stopped adding releases in May 2026 and announced that its feed/API
-will close in early-to-mid October 2026. Its connection check tests filtered
-archive access only; it cannot provide new releases. See the
-[provider's shutdown notice](https://animetosho.org/).
+AnimeTosho's feed no longer resolves as of October 12, 2026, consistent with
+the [provider's shutdown notice](https://animetosho.org/). Its legacy ID remains
+in the manifest so installed copies receive a retirement update. It makes no
+network requests or episode searches; its health check explicitly reports
+retirement instead of claiming the service is healthy. Disable the
+AnimeTosho (Retired) entry in Hayase. Removing it from this manifest alone
+would leave already-installed code unchanged.
 
 Requests, including response bodies, have a six-second limit. NekoBT uses two
 request stages, so a search can take up to about twelve seconds. Nyaa shares
@@ -41,6 +44,13 @@ packs remain excluded. It uses the same pacing, cache, cooldown and timeout
 limits as Nyaa. Public magnets are built locally; source download URLs are
 not fetched. Titles/categories are evidence, not a probe of the media tracks.
 
+Knaben 0.1.1 adds the Base64-encoded public API URL to the manifest so Hayase's
+desktop host can register its cross-origin permission. Permission is limited
+to `https://api.knaben.org/v2/`; no proxy, private endpoint or credentials are
+involved. Earlier Node-only checks missed this host requirement.
+After updating the repository in Hayase, fully quit and reopen the app to
+reload the manifest permissions. Check that Knaben shows version 0.1.1.
+
 Initial checks found Liar Game episode 8 in 1080p English dub. Black Clover
 132 had no qualifying dub in the checked Knaben results. Coverage overlaps
 other providers; this is a backup, not a promise of additional releases.
@@ -57,3 +67,7 @@ node tests/network-search.mjs
 node --test tests/rate-limit.mjs
 node --test tests/knaben.mjs
 ```
+
+The offline checks cover Hayase's decoded-URL prefix contract, manifest/code
+versions and retired-source behavior. They do not automate the installed
+Hayase UI or verify playback.

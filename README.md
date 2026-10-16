@@ -39,6 +39,14 @@ cooldown using the server's Retry-After header, or one minute if it is absent
 or invalid. The error displays the remaining wait; failed responses are not
 cached. Network failures remain distinct from searches with no matches.
 
+Nyaa 1.0.16 and Knaben 0.1.2 retain all supplied title aliases during local
+result filtering. Earlier variant limits could discard an alias that was
+actually searched. The network budget remains three aliases and at most nine
+single/movie queries or three batch queries, with the same deadline.
+When no usable result is found, a failed query now remains an error even if
+another alias returned an empty response. Successful fallback results still
+return normally. Audio, season and episode requirements are unchanged.
+
 The queue, cache and cooldown last for this extension's loaded lifetime; other
 installed Nyaa extensions have their own requests. Avoid repeated refreshes
 during a rate limit. These protections reduce request pressure but cannot
@@ -58,7 +66,7 @@ desktop host can register its cross-origin permission. Permission is limited
 to `https://api.knaben.org/v2/`; no proxy, private endpoint or credentials are
 involved. Earlier Node-only checks missed this host requirement.
 After updating the repository in Hayase, fully quit and reopen the app to
-reload the manifest permissions. Check that Knaben shows version 0.1.1.
+reload the manifest permissions. Check that Knaben shows version 0.1.2.
 
 Initial checks found Liar Game episode 8 in 1080p English dub. Black Clover
 132 had no qualifying dub in the checked Knaben results. Coverage overlaps
@@ -76,6 +84,7 @@ node tests/network-search.mjs
 node --test tests/rate-limit.mjs
 node --test tests/knaben.mjs
 node --test tests/seadex.mjs
+node --test tests/search-diagnostics.mjs
 ```
 
 The offline checks cover Hayase's decoded-URL prefix contract, manifest/code

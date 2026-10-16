@@ -19,7 +19,7 @@
     "manifestVersion": 2,
     "id": "hayase.extension.lemosine.nyaa.english-dubs",
     "name": "Lemo Dub Nyaa",
-    "version": "1.0.16",
+    "version": "1.0.17",
     "description": "English-audio anime torrents from Nyaa.si.",
     "type": "torrent",
     "accuracy": "low",
@@ -30,7 +30,7 @@
     "url": "aHR0cHM6Ly9ueWFhLnNp",
     "icon": "https://nyaa.si/static/favicon.png",
     "update": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/index.json",
-    "code": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/lemo.nyaa.english-dubs.js?v=1.0.16"
+    "code": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/lemo.nyaa.english-dubs.js?v=1.0.17"
   },
   {
     "manifestVersion": 2,
@@ -68,8 +68,8 @@
     "manifestVersion": 2,
     "id": "hayase.extension.lemosine.knaben.english-dubs",
     "name": "Lemo Dub Knaben",
-    "version": "0.1.2",
-    "description": "Anime torrent backup from Knaben. Requires an explicit English dub/audio title label.",
+    "version": "0.1.3",
+    "description": "English-audio anime backup from Knaben. Also accepts [Dub] from Nyaa's English-translated category.",
     "url": "aHR0cHM6Ly9hcGkua25hYmVuLm9yZy92Mi8=",
     "type": "torrent",
     "accuracy": "low",
@@ -78,6 +78,6 @@
     "languages": ["US"],
     "icon": "https://webtorrent.io/img/webtorrent-small.png",
     "update": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/index.json",
-    "code": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/lemo.knaben.dubs.js?v=0.1.2"
+    "code": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/lemo.knaben.dubs.js?v=0.1.3"
   }
 ]

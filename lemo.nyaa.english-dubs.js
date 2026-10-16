@@ -21,6 +21,7 @@ const TRACKERS = [
 ].map(tracker => `&tr=${encodeURIComponent(tracker)}`).join("");
 
 const AUDIO_RE = /\b(dubbed|dual[-\s._]?audio|english[-\s._]?dub|eng[-\s._]?dub|multi[-\s._]?audio)\b/i;
+const SHORT_DUB_RE = /\[\s*dub\s*\]/i;
 
 const COUR_RELEASE_MAPPINGS = [
   {
@@ -198,7 +199,10 @@ function parseRss(xml, query) {
     .map(item => {
       const title = tag(item, "title");
       const hash = nyaaTag(item, "infoHash").toLowerCase();
-      if (!title || !hash || !AUDIO_RE.test(title)) return null;
+      const category = nyaaTag(item, "categoryId");
+      if (category && category !== CATEGORY) return null;
+      // The request is scoped to English-translated anime; some releases use only [Dub].
+      if (!title || !hash || (!AUDIO_RE.test(title) && !SHORT_DUB_RE.test(title))) return null;
       if (!titleMatches(title, query.titles)) return null;
       if (!seasonMatches(title, expectedSeason)) return null;
       if (query.episode && !acceptableEpisodeResult(title, query.episode)) return null;

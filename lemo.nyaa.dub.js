@@ -1,39 +1,202 @@
-export default new class {
-  url=atob("aHR0cHM6Ly9yZWxlYXNlcy5tb2UvYXBpL2NvbGxlY3Rpb25zL2VudHJpZXM=");
-  
-  async single({anilistId: anilistId, titles: titles, episodeCount: episodeCount}) {
-    if (!navigator.onLine) return [];
-    if (!anilistId) throw new Error("No anilistId provided");
-    if (!titles?.length) throw new Error("No titles provided");
-    
-    const res = await fetch(`${this.url}?page=1&perPage=1&filter=(alID="${anilistId}"%26%26trs.dualAudio?=true)&skipTotal=1&expand=trs`), {items: items} = await res.json();
-    if (!items[0]?.expand?.trs?.length) return [];
-    
-    const {trs: trs} = items[0].expand;
-    
-    return trs.filter(({infoHash: infoHash, files: files, dualAudio: dualAudio}) => "<redacted>" !== infoHash && ((!episodeCount || 1 === episodeCount || 1 === files.length) && dualAudio)).map(torrent => ({
-      hash: torrent.infoHash,
-      link: torrent.infoHash,
-      title: 1 === torrent.files.length ? torrent.files[0].name : `[${torrent.releaseGroup}] ${titles[0]} ${torrent.dualAudio ? "Dual Audio" : ""}`,
-      size: torrent.files.reduce((prev, curr) => prev + curr.length, 0),
-      type: torrent.isBest ? "best" : "alt",
-      date: new Date(torrent.created),
-      seeders: 0,
-      leechers: 0,
-      downloads: 0,
-      accuracy: "high"
-    }));
+const API_URL = "https://releases.moe/api/collections/entries/records";
+const MAX_SAFE_BATCH_EPISODES = 36;
+
+const TRACKERS = [
+  "http://nyaa.tracker.wf:7777/announce",
+  "udp://open.stealth.si:80/announce",
+  "udp://tracker.opentrackr.org:1337/announce",
+  "udp://exodus.desync.com:6969/announce",
+  "udp://tracker.torrent.eu.org:451/announce"
+].map(tracker => `&tr=${encodeURIComponent(tracker)}`).join("");
+
+function episodeMatches(title, episode) {
+  const target = Number.parseInt(episode, 10);
+  if (!Number.isFinite(target)) return false;
+
+  const text = String(title);
+  const explicitEpisodes = [
+    ...text.matchAll(/\bS\d{1,2}\s*E\s*(\d{1,4})(?!\d)/gi),
+    ...text.matchAll(/\b(?:E|EP|EPS|Episode)\s*\.?\s*(\d{1,4})(?!\d)/gi)
+  ];
+
+  if (explicitEpisodes.length) {
+    return explicitEpisodes.some(match => Number.parseInt(match[1], 10) === target);
   }
 
-  batch=() => [];
-  movie=() => [];
+  for (const match of text.matchAll(/\d{1,4}/g)) {
+    const value = match[0];
+    const parsed = Number.parseInt(value, 10);
+    if (parsed !== target) continue;
 
-  async test() {
+    const index = match.index ?? 0;
+    const before = text[index - 1] ?? "";
+    const suffix = text.slice(index + value.length);
+    const after = suffix[0] ?? "";
+
+    if (value.length === 4 && parsed >= 1900 && parsed <= 2099) continue;
+    if (/[A-Za-z]/.test(before)) continue;
+    if (/[A-Za-z]/.test(after) && !/^v\d/i.test(suffix)) continue;
+    return true;
+  }
+
+  return false;
+}
+
+function videoFiles(files) {
+  return files.filter(file => /\.(?:mkv|mp4|avi|webm|m4v|mov)$/i.test(file?.name ?? ""));
+}
+
+function hasCompleteAbsoluteNumbering(videos, episodeCount) {
+  const count = Number(episodeCount);
+  if (!Number.isInteger(count) || count <= MAX_SAFE_BATCH_EPISODES) return false;
+
+  // Large packs need a complete, non-restarting sequence that Hayase can resolve by filename.
+  const episodes = new Set();
+  let series;
+  for (const file of videos) {
+    const name = String(file.name ?? "").split(/[\\/]/).at(-1);
+    if (/\bS0{1,2}[._ -]+E\d{1,4}(?!\d)/i.test(name)) continue;
+    const tokens = [...name.matchAll(/\bS(\d{1,2})E(\d{1,4})(?!\d)/gi)];
+    if (tokens.length !== 1) return false;
+    const suffix = name.slice(tokens[0].index + tokens[0][0].length);
+    if (/^\.\d+(?![\dp])|^\s*[-~+&,\u2013\u2014]\s*(?:S\d{1,2})?E?\s*\d/i.test(suffix)) return false;
+    const season = Number(tokens[0][1]);
+    if (season === 0) continue;
+
+    const episode = Number(tokens[0][2]);
+    if (season !== 1 || episode < 1 || episode > count || episodes.has(episode)) return false;
+    const stem = name.slice(0, tokens[0].index)
+      .replace(/\[[^\]]*\]/g, "").normalize("NFKC").toLowerCase()
+      .replace(/[._-]+/g, " ").replace(/\s+/g, " ").trim();
+    if (!stem || (series && stem !== series)) return false;
+    series = stem;
+    episodes.add(episode);
+  }
+  return episodes.size === count;
+}
+
+function queryTitles(titles, media) {
+  const mediaTitles = media?.title ? Object.values(media.title) : [];
+  const synonyms = Array.isArray(media?.synonyms) ? media.synonyms : [];
+  const supplied = Array.isArray(titles) ? titles : [];
+
+  return [...new Set([...mediaTitles, ...supplied, ...synonyms]
+    .filter(title => typeof title === "string" && title.trim())
+    .map(title => title.trim()))];
+}
+
+const REQUEST_TIMEOUT_MS = 6000;
+
+async function fetchJson(request, url) {
+  const controller = new AbortController();
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error("SeaDex did not respond within 6 seconds. Try again later."));
+      controller.abort();
+    }, REQUEST_TIMEOUT_MS);
+  });
+  const response = (async () => {
+    const res = await request(url, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" }
+    });
+    if (!res.ok) throw new Error("SeaDex returned HTTP " + res.status + ".");
+    const text = await res.text();
+    let data;
     try {
-      if (!(await fetch(this.url)).ok) throw new Error(`Failed to load data from ${this.url}! Is the site down?`);
-      return !0;
-    } catch (error) {
-      throw new Error(`Could not reach ${this.url}! Does the site work in your region?`);
+      data = JSON.parse(text);
+    } catch {
+      throw new Error("SeaDex returned an invalid response instead of JSON.");
     }
+    if (!Array.isArray(data?.items)) throw new Error("SeaDex returned an invalid records response.");
+    return data;
+  })();
+
+  try {
+    return await Promise.race([response, timeout]);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error("SeaDex connection failed (releases.moe). Update extensions and restart Hayase; if it persists, check the service or network. " + error.message);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
-};
+}
+
+function magnet(hash, title) {
+  return `magnet:?xt=urn:btih:${hash}&dn=${encodeURIComponent(title)}${TRACKERS}`;
+}
+
+export default new class {
+  url = API_URL;
+  
+  async single({ anilistId, titles, media, episode, episodeCount, fetch: request = fetch }) {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return [];
+    const availableTitles = queryTitles(titles, media);
+    if (!anilistId || !availableTitles.length) return [];
+    
+    const filter = encodeURIComponent(`alID="${anilistId}"`);
+    const data = await fetchJson(request, `${this.url}?page=1&perPage=200&filter=${filter}&skipTotal=1&expand=trs`);
+    const items = Array.isArray(data?.items) ? data.items : [];
+    const trs = Array.isArray(items[0]?.expand?.trs) ? items[0].expand.trs : [];
+    if (!trs.length) return [];
+    
+    return trs
+      .filter(torrent => {
+        const files = Array.isArray(torrent.files) ? torrent.files : [];
+        const videos = videoFiles(files);
+        const matches = episode
+          ? videos.filter(file => episodeMatches(file.name ?? "", episode))
+          : [];
+        const safeEpisodeMatch = !episode || (
+          matches.length === 1 &&
+          (videos.length <= MAX_SAFE_BATCH_EPISODES ||
+            hasCompleteAbsoluteNumbering(videos, episodeCount ?? media?.episodes))
+        );
+
+        return (
+          torrent.infoHash &&
+          "<redacted>" !== torrent.infoHash &&
+          torrent.dualAudio &&
+          videos.length > 0 &&
+          safeEpisodeMatch
+        );
+      })
+      .map(torrent => {
+        const files = Array.isArray(torrent.files) ? torrent.files : [];
+        const videos = videoFiles(files);
+        const title = videos.length === 1 && videos[0]?.name
+          ? videos[0].name
+          : `[${torrent.releaseGroup ?? "SeaDex"}] ${availableTitles[0]} Dual Audio`;
+
+        return {
+          hash: torrent.infoHash,
+          link: magnet(torrent.infoHash, title),
+          title,
+          size: files.reduce((prev, curr) => prev + (curr.length ?? 0), 0),
+          type: videos.length > 1 ? "batch" : torrent.isBest ? "best" : "alt",
+          date: new Date(torrent.created),
+          seeders: 0,
+          leechers: 0,
+          downloads: 0,
+          accuracy: "high"
+        };
+      });
+  }
+
+  async batch() {
+    return [];
+  }
+
+  async movie() {
+    return [];
+  }
+
+  async test({ fetch: request = fetch } = {}) {
+    const data = await fetchJson(request, this.url + "?perPage=1");
+    if (!Array.isArray(data?.items)) throw new Error("SeaDex returned an invalid response.");
+    return true;
+  }
+}();

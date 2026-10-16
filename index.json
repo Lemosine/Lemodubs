@@ -3,7 +3,7 @@
     "manifestVersion": 2,
     "id": "hayase.extension.lemosine.seadex.english-dubs",
     "name": "Lemo Dub SeaDex",
-    "version": "1.0.19",
+    "version": "1.0.20",
     "url": "aHR0cHM6Ly9yZWxlYXNlcy5tb2UvYXBpL2NvbGxlY3Rpb25zL2VudHJpZXMv",
     "description": "English-audio torrent results from SeaDex/Releases.moe.",
     "type": "torrent",
@@ -13,7 +13,7 @@
     "languages": ["US"],
     "icon": "https://webtorrent.io/img/webtorrent-small.png",
     "update": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/index.json",
-    "code": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/lemo.nyaa.dub.js?v=1.0.19"
+    "code": "https://raw.githubusercontent.com/Lemosine/Lemodubs/fix/hayase-extension-config/lemo.nyaa.dub.js?v=1.0.20"
   },
   {
     "manifestVersion": 2,
